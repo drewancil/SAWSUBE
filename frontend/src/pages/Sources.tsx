@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
 
-const TABS = ['Unsplash', 'NASA APOD', 'Rijksmuseum', 'Reddit', 'Pexels'] as const
+const TABS = ['Unsplash', 'NASA APOD', 'Rijksmuseum', 'Reddit', 'Pexels', 'Pixabay'] as const
 type Tab = typeof TABS[number]
 
 export default function Sources() {
@@ -21,6 +21,7 @@ export default function Sources() {
       {tab === 'Rijksmuseum' && <Rijks />}
       {tab === 'Reddit' && <Reddit />}
       {tab === 'Pexels' && <Pexels />}
+      {tab === 'Pixabay' && <Pixabay />}
     </div>
   )
 }
@@ -99,6 +100,28 @@ function Rijks() {
       </div>
       <Grid items={items} onImport={async (it) => {
         try { await api.post('/api/sources/rijksmuseum/import', { id: it.id }); t.push({ type: 'success', text: 'Imported' }) }
+        catch (e: any) { t.push({ type: 'error', text: e.message }) }
+      }} />
+    </div>
+  )
+}
+
+function Pixabay() {
+  const [q, setQ] = useState('landscape')
+  const [items, setItems] = useState<any[]>([])
+  const t = useToast()
+  const search = async () => {
+    try { setItems(await api.get(`/api/sources/pixabay/search?q=${encodeURIComponent(q)}`)) }
+    catch (e: any) { t.push({ type: 'error', text: e.message }) }
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search()} placeholder="Search Pixabay photos…" />
+        <button className="btn-primary" onClick={search}>Search</button>
+      </div>
+      <Grid items={items} onImport={async (it) => {
+        try { await api.post('/api/sources/pixabay/import', { id: it.id }); t.push({ type: 'success', text: 'Imported' }) }
         catch (e: any) { t.push({ type: 'error', text: e.message }) }
       }} />
     </div>
