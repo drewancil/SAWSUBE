@@ -11,10 +11,11 @@ export default function Dashboard() {
   const refresh = async () => {
     const list = await api.get<TV[]>('/api/tvs')
     setTvs(list)
+    const results = await Promise.all(
+      list.map((t) => api.get<TVStatus>(`/api/tvs/${t.id}/status`).catch(() => null)),
+    )
     const ss: Record<number, TVStatus> = {}
-    for (const t of list) {
-      try { ss[t.id] = await api.get<TVStatus>(`/api/tvs/${t.id}/status`) } catch {}
-    }
+    list.forEach((t, i) => { if (results[i]) ss[t.id] = results[i] as TVStatus })
     setStatuses(ss)
     setStats(await api.get('/api/stats'))
     setHistory(await api.get<any[]>('/api/history?limit=20'))

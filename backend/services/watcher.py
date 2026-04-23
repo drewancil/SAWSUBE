@@ -19,11 +19,23 @@ class _Handler(FileSystemEventHandler):
     def __init__(self, loop: asyncio.AbstractEventLoop, folder_id: int) -> None:
         self.loop = loop
         self.folder_id = folder_id
+        # Map path -> pending asyncio.Task; cancel & replace on each new event
+        self._pending: dict[str, asyncio.Task] = {}
 
     def _enqueue(self, path: str) -> None:
         if not is_supported(path):
             return
-        asyncio.run_coroutine_threadsafe(self._handle(path), self.loop)
+        # Schedule on loop and track for debounce
+        def _schedule():
+            existing = self._pending.get(path)
+            if existing and not existing.done():
+                existing.cancel()
+            self._pending[path] = asyncio.ensure_future(self._handle(path))
+        try:
+            self.loop.call_soon_threadsafe(_schedule)
+        except RuntimeError:
+            # Loop closed during shutdown
+            pass
 
     def on_created(self, event: FileSystemEvent) -> None:
         if not event.is_directory:
@@ -34,8 +46,22 @@ class _Handler(FileSystemEventHandler):
             self._enqueue(event.src_path)
 
     async def _handle(self, path: str) -> None:
-        await asyncio.sleep(2)  # debounce mid-write
+        try:
+            await asyncio.sleep(2)  # debounce mid-write
+        except asyncio.CancelledError:
+            return
         if not os.path.exists(path):
+            return
+        # Wait until file size stabilises (Windows lock workaround)
+        try:
+            prev = -1
+            for _ in range(5):
+                size = os.path.getsize(path)
+                if size == prev and size > 0:
+                    break
+                prev = size
+                await asyncio.sleep(0.5)
+        except OSError:
             return
         try:
             digest = await asyncio.to_thread(sha256_file, path)

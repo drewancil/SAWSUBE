@@ -91,7 +91,11 @@ def process_image_sync(src_path: str, file_hash: str) -> tuple[str, int, int]:
 
     target = settings.resolution_tuple
     with Image.open(src_path) as im:
+        # Preserve ICC profile across exif_transpose (transpose builds new image)
+        icc = im.info.get("icc_profile")
         im = ImageOps.exif_transpose(im)
+        if icc and not im.info.get("icc_profile"):
+            im.info["icc_profile"] = icc
         im = _to_srgb(im)
         iw, ih = im.size
         ratio = iw / ih

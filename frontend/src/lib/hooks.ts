@@ -1,8 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { wsClient } from './ws'
 
 export function useWS(handler: (msg: any) => void) {
-  useEffect(() => { const off = wsClient.on(handler); return () => { off() } }, [handler])
+  const ref = useRef(handler)
+  ref.current = handler
+  useEffect(() => {
+    const off = wsClient.on((m) => ref.current(m))
+    return () => { off() }
+  }, [])
 }
 
 export function useToggleTheme() {

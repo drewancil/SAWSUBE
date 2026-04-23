@@ -1,16 +1,26 @@
 from __future__ import annotations
 import asyncio
+import re
 import httpx
 from ...config import settings
 
 _last_call = 0.0
 _lock = asyncio.Lock()
+_SUB_RE = re.compile(r"^[A-Za-z0-9_]{1,50}$")
 
 
 async def fetch(sub: str, sort: str = "top", t: str = "week", limit: int = 20) -> list[dict]:
     global _last_call
+    if not _SUB_RE.match(sub or ""):
+        return []
+    if sort not in {"top", "hot", "new", "rising", "controversial"}:
+        sort = "top"
+    if t not in {"hour", "day", "week", "month", "year", "all"}:
+        t = "week"
+    limit = max(1, min(int(limit), 100))
     async with _lock:
-        delay = 2.0 - (asyncio.get_event_loop().time() - _last_call)
+        loop = asyncio.get_running_loop()
+        delay = 2.0 - (loop.time() - _last_call)
         if delay > 0:
             await asyncio.sleep(delay)
         url = f"https://www.reddit.com/r/{sub}/{sort}.json"
@@ -20,7 +30,7 @@ async def fetch(sub: str, sort: str = "top", t: str = "week", limit: int = 20) -
             r = await c.get(url, params=params)
             r.raise_for_status()
             j = r.json()
-        _last_call = asyncio.get_event_loop().time()
+        _last_call = loop.time()
     out = []
     for child in (j.get("data") or {}).get("children", []):
         d = child.get("data") or {}

@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext, ReactNode, useCallback } from 'react'
+import { useEffect, useState, createContext, useContext, ReactNode, useCallback, useRef } from 'react'
 import { useWS } from '../lib/hooks'
 
 type Toast = { id: number; type: 'info' | 'success' | 'error'; text: string }
@@ -7,6 +7,7 @@ export const useToast = () => useContext(Ctx)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([])
+  const offlineSeen = useRef<Set<number>>(new Set())
   const push = useCallback((t: Omit<Toast, 'id'>) => {
     const id = Date.now() + Math.random()
     setItems((s) => [...s, { ...t, id }])
@@ -16,7 +17,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     if (m.type === 'schedule_fired') push({ type: 'info', text: `Schedule fired (TV ${m.tv_id})` })
     else if (m.type === 'art_changed') push({ type: 'success', text: `Art changed on TV ${m.tv_id}` })
     else if (m.type === 'image_added') push({ type: 'info', text: `Image added: ${m.filename}` })
-    else if (m.type === 'tv_status' && m.payload?.online === false) push({ type: 'error', text: `TV ${m.tv_id} offline` })
+    else if (m.type === 'tv_status') {
+      if (m.payload?.online === false) {
+        if (!offlineSeen.current.has(m.tv_id)) {
+          offlineSeen.current.add(m.tv_id)
+          push({ type: 'error', text: `TV ${m.tv_id} offline` })
+        }
+      } else if (m.payload?.online === true) {
+        offlineSeen.current.delete(m.tv_id)
+      }
+    }
   })
   return (
     <Ctx.Provider value={{ push }}>

@@ -8,7 +8,7 @@ from ..database import Base
 class Schedule(Base):
     __tablename__ = "schedules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tv_id: Mapped[int] = mapped_column(ForeignKey("tvs.id", ondelete="CASCADE"))
+    tv_id: Mapped[int] = mapped_column(ForeignKey("tvs.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(128), default="Schedule")
     mode: Mapped[str] = mapped_column(String(16), default="random")  # random|sequential|weighted
     source_filter: Mapped[dict | None] = mapped_column(JSON, nullable=True)

@@ -48,11 +48,15 @@ function TVPanel({ tv }: { tv: TV }) {
   useEffect(() => { refresh() }, [tv.id])
 
   const apply = async (patch: any) => {
+    const prev = settings
     setSettings({ ...settings, ...patch })
     try {
       await api.post(`/api/tvs/${tv.id}/art/settings`, patch)
       t.push({ type: 'success', text: 'Applied' })
-    } catch (e: any) { t.push({ type: 'error', text: e.message }) }
+    } catch (e: any) {
+      setSettings(prev)
+      t.push({ type: 'error', text: e.message })
+    }
   }
 
   const pair = async () => {
@@ -95,37 +99,40 @@ function TVPanel({ tv }: { tv: TV }) {
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Field label="Brightness (1–10)">
             <input type="number" min={1} max={10} className="input"
-                   defaultValue={settings.brightness ?? 5}
+                   value={settings.brightness ?? 5}
+                   onChange={(e) => setSettings({ ...settings, brightness: Number(e.target.value) })}
                    onBlur={(e) => apply({ brightness: Number(e.target.value) })} />
           </Field>
           <Field label="Color temp (-5..5)">
             <input type="number" min={-5} max={5} className="input"
-                   defaultValue={settings.color_temp ?? 0}
+                   value={settings.color_temp ?? 0}
+                   onChange={(e) => setSettings({ ...settings, color_temp: Number(e.target.value) })}
                    onBlur={(e) => apply({ color_temp: Number(e.target.value) })} />
           </Field>
           <Field label="Slideshow interval (mins)">
-            <select className="input" defaultValue={settings.slideshow_interval ?? 3}
+            <select className="input" value={settings.slideshow_interval ?? 3}
                     onChange={(e) => apply({ slideshow_interval: Number(e.target.value) })}>
               {[3, 5, 10, 15, 30, 60, 180, 360, 720, 1440].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </Field>
           <Field label="Shuffle">
-            <input type="checkbox" defaultChecked={!!settings.shuffle}
+            <input type="checkbox" checked={!!settings.shuffle}
                    onChange={(e) => apply({ shuffle: e.target.checked })} />
           </Field>
           <Field label="Motion timer">
-            <select className="input" defaultValue={settings.motion_timer ?? 'off'}
+            <select className="input" value={settings.motion_timer ?? 'off'}
                     onChange={(e) => apply({ motion_timer: e.target.value })}>
               {['off', '5', '15', '30', '60', '180'].map((v) => <option key={v}>{v}</option>)}
             </select>
           </Field>
           <Field label="Motion sensitivity (1-3)">
             <input type="number" min={1} max={3} className="input"
-                   defaultValue={settings.motion_sensitivity ?? 2}
+                   value={settings.motion_sensitivity ?? 2}
+                   onChange={(e) => setSettings({ ...settings, motion_sensitivity: Number(e.target.value) })}
                    onBlur={(e) => apply({ motion_sensitivity: Number(e.target.value) })} />
           </Field>
           <Field label="Brightness sensor">
-            <input type="checkbox" defaultChecked={!!settings.brightness_sensor}
+            <input type="checkbox" checked={!!settings.brightness_sensor}
                    onChange={(e) => apply({ brightness_sensor: e.target.checked })} />
           </Field>
         </div>

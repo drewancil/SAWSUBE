@@ -53,21 +53,35 @@ class TVConnection:
     async def _ensure_art(self) -> Any:
         if not HAS_LIB:
             raise RuntimeError("samsungtvws library not installed")
-        if self.art is None:
-            self.art = SamsungTVAsyncArt(
-                host=self.ip, port=self.port, token_file=self.token_file, name=self.name or "FrameManager"
-            )
-            await self.art.start_listening()
+        if self.art is not None:
+            return self.art
+        async with self.lock:
+            if self.art is None:
+                self.art = SamsungTVAsyncArt(
+                    host=self.ip, port=self.port, token_file=self.token_file, name=self.name or "SAWSUBE"
+                )
+                try:
+                    await self.art.start_listening()
+                except Exception:
+                    self.art = None
+                    raise
         return self.art
 
     async def _ensure_remote(self) -> Any:
         if not HAS_LIB:
             raise RuntimeError("samsungtvws library not installed")
-        if self.remote is None:
-            self.remote = SamsungTVWSAsyncRemote(
-                host=self.ip, port=self.port, token_file=self.token_file, name=self.name or "FrameManager"
-            )
-            await self.remote.start_listening()
+        if self.remote is not None:
+            return self.remote
+        async with self.lock:
+            if self.remote is None:
+                self.remote = SamsungTVWSAsyncRemote(
+                    host=self.ip, port=self.port, token_file=self.token_file, name=self.name or "SAWSUBE"
+                )
+                try:
+                    await self.remote.start_listening()
+                except Exception:
+                    self.remote = None
+                    raise
         return self.remote
 
     async def close(self) -> None:
@@ -139,7 +153,10 @@ class TVManager:
                 if conn is None or conn._closed:
                     return
                 status = await self.fetch_status(tv_id)
-                if status != conn.last_status:
+                # Only broadcast when meaningful keys differ (ignore transient 'error' string)
+                keys = ("online", "artmode", "current")
+                changed = any(status.get(k) != conn.last_status.get(k) for k in keys)
+                if changed:
                     conn.last_status = status
                     await ws_manager.broadcast({"type": "tv_status", "tv_id": tv_id, "payload": status})
                 backoff = 5

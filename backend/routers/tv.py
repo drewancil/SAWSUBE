@@ -30,7 +30,10 @@ async def add_tv(payload: TVCreate, s: AsyncSession = Depends(get_session)):
 
 @router.get("/discover")
 async def discover():
-    return await discover_tvs()
+    try:
+        return await discover_tvs()
+    except Exception as e:
+        raise HTTPException(503, f"discovery failed: {e}")
 
 
 @router.get("/{tv_id}", response_model=TVOut)

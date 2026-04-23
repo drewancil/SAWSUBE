@@ -26,8 +26,8 @@ class Image(Base):
 class TVImage(Base):
     __tablename__ = "tv_images"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tv_id: Mapped[int] = mapped_column(ForeignKey("tvs.id", ondelete="CASCADE"))
-    image_id: Mapped[int] = mapped_column(ForeignKey("images.id", ondelete="CASCADE"))
+    tv_id: Mapped[int] = mapped_column(ForeignKey("tvs.id", ondelete="CASCADE"), index=True)
+    image_id: Mapped[int] = mapped_column(ForeignKey("images.id", ondelete="CASCADE"), index=True)
     remote_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_on_tv: Mapped[bool] = mapped_column(Boolean, default=True)

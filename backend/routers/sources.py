@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import os
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,10 @@ async def list_folders(s: AsyncSession = Depends(get_session)):
 
 @router.post("/folders", response_model=FolderOut)
 async def add_folder(payload: FolderCreate, s: AsyncSession = Depends(get_session)):
-    f = WatchFolder(**payload.model_dump())
+    path = os.path.abspath(payload.path or "")
+    if not path or not os.path.isdir(path):
+        raise HTTPException(400, "path does not exist or is not a directory")
+    f = WatchFolder(path=path, is_active=payload.is_active, auto_display=payload.auto_display)
     s.add(f)
     await s.commit()
     await s.refresh(f)

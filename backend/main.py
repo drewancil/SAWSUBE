@@ -15,7 +15,7 @@ from .services.watcher import watcher
 from .routers import tv, art, images, schedule, sources, ws as ws_router, meta
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-log = logging.getLogger("frame-manager")
+log = logging.getLogger("sawsube")
 
 
 @asynccontextmanager
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_running_loop()
     watcher.start()
     await watcher.reload(loop)
-    log.info("Frame Manager up on %s:%s", settings.HOST, settings.PORT)
+    log.info("SAWSUBE up on %s:%s", settings.HOST, settings.PORT)
     try:
         yield
     finally:
@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
         await tv_manager.shutdown()
 
 
-app = FastAPI(title="Samsung Frame TV Art Manager", version="1.0", lifespan=lifespan)
+app = FastAPI(title="SAWSUBE", version="1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,11 +64,13 @@ if os.path.isdir(settings.FRONTEND_DIST):
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
+    from fastapi import HTTPException
+
     @app.get("/{full_path:path}")
     async def spa(full_path: str):
-        # Don't intercept API
-        if full_path.startswith("api/") or full_path == "ws":
-            return FileResponse(os.path.join(settings.FRONTEND_DIST, "index.html"))
+        # Never serve SPA for API or WS routes — let them 404 properly
+        if full_path.startswith("api/") or full_path == "ws" or full_path.startswith("ws/"):
+            raise HTTPException(status_code=404, detail="Not Found")
         candidate = os.path.join(settings.FRONTEND_DIST, full_path)
         if full_path and os.path.isfile(candidate):
             return FileResponse(candidate)

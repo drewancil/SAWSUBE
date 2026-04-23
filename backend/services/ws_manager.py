@@ -24,15 +24,14 @@ class WSManager:
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         data = json.dumps(message, default=str)
-        dead: list[WebSocket] = []
         async with self._lock:
             clients = list(self.clients)
-        for c in clients:
-            try:
-                await c.send_text(data)
-            except Exception as e:
-                log.debug("ws send failed: %s", e)
-                dead.append(c)
+        if not clients:
+            return
+        results = await asyncio.gather(
+            *(c.send_text(data) for c in clients), return_exceptions=True
+        )
+        dead = [c for c, r in zip(clients, results) if isinstance(r, Exception)]
         if dead:
             async with self._lock:
                 for c in dead:

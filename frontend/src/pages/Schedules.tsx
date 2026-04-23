@@ -9,6 +9,8 @@ export default function Schedules() {
   const [items, setItems] = useState<Schedule[]>([])
   const [tvs, setTvs] = useState<TV[]>([])
   const [editing, setEditing] = useState<Partial<Schedule> | null>(null)
+  const [filterText, setFilterText] = useState<string>('')
+  const [filterError, setFilterError] = useState<string>('')
   const t = useToast()
 
   const load = async () => {
@@ -111,12 +113,24 @@ export default function Schedules() {
               </div>
             </Field>
             <Field label="Source filter (JSON)">
-              <textarea className="input font-mono text-xs h-24" value={JSON.stringify(editing.source_filter || {}, null, 2)}
-                        onChange={(e) => { try { setEditing({ ...editing, source_filter: JSON.parse(e.target.value) }) } catch {} }} />
+              <textarea className="input font-mono text-xs h-24"
+                        value={filterText !== '' ? filterText : JSON.stringify(editing.source_filter || {}, null, 2)}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setFilterText(v)
+                          try {
+                            const parsed = JSON.parse(v)
+                            setEditing({ ...editing, source_filter: parsed })
+                            setFilterError('')
+                          } catch (err: any) {
+                            setFilterError(err.message || 'Invalid JSON')
+                          }
+                        }} />
+              {filterError && <div className="text-xs" style={{ color: '#A33228' }}>{filterError}</div>}
             </Field>
             <div className="flex gap-2 justify-end">
-              <button className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="btn-primary" onClick={save}>Save</button>
+              <button className="btn-ghost" onClick={() => { setEditing(null); setFilterText(''); setFilterError('') }}>Cancel</button>
+              <button className="btn-primary" disabled={!!filterError} onClick={save}>Save</button>
             </div>
           </div>
         </div>

@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     TV_DEFAULT_IP: str = ""
     IMAGE_FOLDER: str = "./data/images"
-    DB_PATH: str = "./data/framemanager.db"
+    DB_PATH: str = "./data/sawsube.db"
     TOKEN_DIR: str = "./data/tokens"
     IMAGE_CACHE_DIR: str = "./data/cache"
     THUMBNAIL_DIR: str = "./data/thumbnails"
@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     PORTRAIT_HANDLING: str = "blur"  # blur | crop | skip
     UNSPLASH_API_KEY: str = ""
     RIJKSMUSEUM_API_KEY: str = ""
-    REDDIT_USER_AGENT: str = "frame-manager/1.0 (local self-hosted)"
+    NASA_API_KEY: str = ""
+    REDDIT_USER_AGENT: str = "sawsube/1.0 (local self-hosted)"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     POLL_INTERVAL_SECS: int = 20

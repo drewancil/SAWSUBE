@@ -58,12 +58,12 @@ export default function Library() {
   }
 
   const bulkSend = async (tv_id: number) => {
-    for (const id of selected) await sendTo(id, tv_id)
+    await Promise.all(Array.from(selected).map((id) => sendTo(id, tv_id)))
     setSelected(new Set())
   }
   const bulkDelete = async () => {
     if (!confirm(`Delete ${selected.size} images?`)) return
-    for (const id of selected) await api.del(`/api/images/${id}?also_from_tv=true`)
+    await Promise.all(Array.from(selected).map((id) => api.del(`/api/images/${id}?also_from_tv=true`).catch(() => null)))
     setSelected(new Set()); load()
   }
 

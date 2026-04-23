@@ -42,17 +42,19 @@ async def _eligible_images(s, sched: Schedule) -> list[Image]:
         q = q.where(Image.is_favourite.is_(True))
     if sf.get("source"):
         q = q.where(Image.source == sf["source"])
-    rows = (await s.execute(q)).scalars().all()
     if sf.get("tag"):
-        tag = sf["tag"].lower()
-        rows = [r for r in rows if r.tags and tag in r.tags.lower()]
-    # exclude recently shown
-    recent = (await s.execute(
+        like = f"%{sf['tag'].lower()}%"
+        q = q.where(Image.tags.ilike(like))
+    rows = list((await s.execute(q)).scalars().all())
+    # exclude recently shown unless that would empty the pool
+    recent = set((await s.execute(
         select(History.image_id).where(History.tv_id == sched.tv_id)
         .order_by(History.shown_at.desc()).limit(RECENT_EXCLUDE)
-    )).scalars().all()
-    if rows and len(rows) > len(recent):
-        rows = [r for r in rows if r.id not in recent]
+    )).scalars().all())
+    if recent:
+        filtered = [r for r in rows if r.id not in recent]
+        if filtered:
+            rows = filtered
     return rows
 
 
@@ -72,6 +74,7 @@ async def fire_schedule(sched_id: int) -> None:
         if sched.mode == "sequential":
             sched.last_index = (sched.last_index + 1) % len(imgs)
             img = imgs[sched.last_index]
+            await s.commit()
         elif sched.mode == "weighted":
             weights = [3 if i.is_favourite else 1 for i in imgs]
             img = random.choices(imgs, weights=weights, k=1)[0]

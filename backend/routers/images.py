@@ -1,8 +1,11 @@
 from __future__ import annotations
+import asyncio
 import os
+import re
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
+from PIL import Image as PILImage, UnidentifiedImageError
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
@@ -18,6 +21,17 @@ from ..services.tv_manager import tv_manager
 from ..services.ws_manager import ws_manager
 
 router = APIRouter(prefix="/api/images", tags=["images"])
+
+_SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _safe_filename(name: str) -> str:
+    name = os.path.basename(name or "")
+    name = _SAFE_NAME_RE.sub("_", name).strip("._") or "image"
+    if len(name) > 200:
+        base, ext = os.path.splitext(name)
+        name = base[: 200 - len(ext)] + ext
+    return name
 
 
 @router.get("", response_model=list[ImageOut])
@@ -39,6 +53,8 @@ async def list_images(
     if q:
         like = f"%{q}%"
         qy = qy.where(Image.filename.ilike(like))
+    if tag:
+        qy = qy.where(Image.tags.ilike(f"%{tag}%"))
     if order == "name":
         qy = qy.order_by(Image.filename.asc())
     elif order == "size":
@@ -47,9 +63,6 @@ async def list_images(
         qy = qy.order_by(Image.uploaded_at.desc())
     qy = qy.limit(limit).offset(offset)
     rows = (await s.execute(qy)).scalars().all()
-    if tag:
-        t = tag.lower()
-        rows = [r for r in rows if r.tags and t in r.tags.lower()]
     return rows
 
 
@@ -61,7 +74,11 @@ async def upload(files: list[UploadFile] = File(...), s: AsyncSession = Depends(
     for f in files:
         if not f.filename or not is_supported(f.filename):
             continue
-        target = os.path.join(dest_dir, f.filename)
+        safe = _safe_filename(f.filename)
+        target = os.path.join(dest_dir, safe)
+        # Verify resolved path is inside dest_dir (defence in depth)
+        if not os.path.abspath(target).startswith(os.path.abspath(dest_dir) + os.sep):
+            continue
         n = 1
         base, ext = os.path.splitext(target)
         while os.path.exists(target):
@@ -73,7 +90,17 @@ async def upload(files: list[UploadFile] = File(...), s: AsyncSession = Depends(
                 if not chunk:
                     break
                 fh.write(chunk)
-        digest = sha256_file(target)
+        # MIME / format sniff via Pillow — reject non-images
+        try:
+            with PILImage.open(target) as probe:
+                probe.verify()
+        except (UnidentifiedImageError, Exception):
+            try:
+                os.remove(target)
+            except OSError:
+                pass
+            raise HTTPException(400, "uploaded file is not a valid image")
+        digest = await asyncio.to_thread(sha256_file, target)
         existing = (await s.execute(select(Image).where(Image.file_hash == digest))).scalar_one_or_none()
         if existing:
             try:
@@ -115,6 +142,13 @@ async def delete_image(image_id: int, also_from_tv: bool = False, s: AsyncSessio
                 await tv_manager.delete_image(tv, ti.remote_id)
             ti.is_on_tv = False
         await s.commit()
+    # Best-effort filesystem cleanup
+    for p in (img.local_path, img.processed_path, img.thumbnail_path):
+        if p and os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
     await s.delete(img)
     await s.commit()
     return {"ok": True}
