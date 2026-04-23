@@ -11,6 +11,6 @@ httpx>=0.26.0
 python-multipart>=0.0.7
 wakeonlan>=3.1.0
 websockets>=12.0
-# NickWaterton fork — best Frame TV Art Mode support
-samsungtvws[async,encrypted] @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git
+# NickWaterton fork (preferred); fallback to PyPI release if git clone fails
+samsungtvws[async,encrypted]
 
