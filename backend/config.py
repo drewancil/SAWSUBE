@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     UNSPLASH_API_KEY: str = ""
     RIJKSMUSEUM_API_KEY: str = ""
     NASA_API_KEY: str = ""
+    PEXELS_API_KEY: str = ""
     REDDIT_USER_AGENT: str = "sawsube/1.0 (local self-hosted)"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
