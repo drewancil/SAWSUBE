@@ -31,7 +31,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50 max-w-[calc(100vw-2rem)]">
         {items.map((t) => (
           <div key={t.id} style={{
             background: '#0F1923',

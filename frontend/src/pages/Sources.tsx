@@ -11,9 +11,9 @@ export default function Sources() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl">Sources</h1>
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mb-1">
         {TABS.map((t) => (
-          <button key={t} className={tab === t ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab(t)}>{t}</button>
+          <button key={t} className={`${tab === t ? 'btn-primary' : 'btn-ghost'} shrink-0`} onClick={() => setTab(t)}>{t}</button>
         ))}
       </div>
       {tab === 'Unsplash' && <Unsplash />}

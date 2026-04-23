@@ -100,17 +100,17 @@ export default function Library() {
     <div className="space-y-4" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h1 className="text-2xl">Library</h1>
-        <div className="flex gap-2">
-          <input className="input w-48" placeholder="Search filename" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
-          <select className="input w-32" value={filter.source} onChange={(e) => setFilter({ ...filter, source: e.target.value })}>
+        <div className="flex gap-2 flex-wrap">
+          <input className="input w-40 min-w-0" placeholder="Search filename" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
+          <select className="input w-32 min-w-0" value={filter.source} onChange={(e) => setFilter({ ...filter, source: e.target.value })}>
             <option value="">All sources</option>
             <option>local</option><option>unsplash</option><option>nasa</option><option>rijksmuseum</option><option>reddit</option><option>pexels</option><option>pixabay</option>
           </select>
-          <input className="input w-28" placeholder="Tag" value={filter.tag} onChange={(e) => setFilter({ ...filter, tag: e.target.value })} />
+          <input className="input w-24 min-w-0" placeholder="Tag" value={filter.tag} onChange={(e) => setFilter({ ...filter, tag: e.target.value })} />
           <label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={filter.favourite} onChange={(e) => setFilter({ ...filter, favourite: e.target.checked })} /> Fav</label>
           <button className="btn-primary" onClick={() => fileRef.current?.click()}>Upload</button>
           <input ref={fileRef} type="file" multiple className="hidden" accept="image/*" onChange={(e) => e.target.files && upload(e.target.files)} />
-          <select className="input w-44" disabled={syncing !== null}
+          <select className="input min-w-0" disabled={syncing !== null}
             onChange={(e) => { if (e.target.value) { syncAllTo(Number(e.target.value)); e.target.value = '' } }} defaultValue="">
             <option value="">Sync all to TV…</option>
             {tvs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -142,7 +142,7 @@ export default function Library() {
                 <button onClick={() => fav(img.id)} title="Favourite">{img.is_favourite ? '★' : '☆'}</button>
               </div>
             </div>
-            <div className="absolute inset-x-0 bottom-0 p-2 bg-black/70 opacity-0 group-hover:opacity-100 transition flex flex-col gap-1">
+            <div className="absolute inset-x-0 bottom-0 p-2 bg-black/70 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition flex flex-col gap-1">
               <select className="input text-xs" onChange={(e) => e.target.value && sendTo(img.id, Number(e.target.value))} value="">
                 <option value="">Send to TV…</option>
                 {tvs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -167,7 +167,7 @@ export default function Library() {
       )}
 
       {syncing && (
-        <div className="fixed bottom-4 right-4 card p-3 w-80 z-40 space-y-2">
+        <div className="fixed bottom-4 right-4 card p-3 w-72 sm:w-80 max-w-[calc(100vw-2rem)] z-40 space-y-2">
           <div className="text-sm font-semibold">Syncing to TV… {syncing.done}/{syncing.total}</div>
           <div className="w-full bg-surface rounded-full h-2 overflow-hidden">
             <div className="bg-accent h-2 rounded-full transition-all"

@@ -25,7 +25,7 @@ describe('Sidebar', () => {
       return [] as any
     })
 
-    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    render(<MemoryRouter><Sidebar open={false} onClose={() => {}} /></MemoryRouter>)
     await waitFor(() => {
       expect(screen.getByText('Living')).toBeInTheDocument()
       expect(screen.getByText('Bedroom')).toBeInTheDocument()
@@ -51,7 +51,7 @@ describe('Sidebar', () => {
       concurrent--
       return { id: 1, online: true } as any
     })
-    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    render(<MemoryRouter><Sidebar open={false} onClose={() => {}} /></MemoryRouter>)
     await waitFor(() => {
       expect(screen.getByText('A')).toBeInTheDocument()
     })
@@ -66,14 +66,14 @@ describe('Sidebar', () => {
       }
       throw new Error('boom')
     })
-    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    render(<MemoryRouter><Sidebar open={false} onClose={() => {}} /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText('Solo')).toBeInTheDocument())
     // Should still render TV with neutral dot, no crash
   })
 
   it('renders empty-state when no TVs', async () => {
     vi.spyOn(api, 'get').mockResolvedValue([] as any)
-    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    render(<MemoryRouter><Sidebar open={false} onClose={() => {}} /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText('None added')).toBeInTheDocument())
   })
 })

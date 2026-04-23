@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api, TV, TVStatus } from '../lib/api'
 import { useWS, useToggleTheme } from '../lib/hooks'
@@ -13,10 +13,14 @@ const links = [
   ['/settings', 'Settings'],
 ] as const
 
-export function Sidebar() {
+export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tvs, setTvs] = useState<TV[]>([])
   const [statuses, setStatuses] = useState<Record<number, TVStatus>>({})
   const { dark, toggle } = useToggleTheme()
+  const location = useLocation()
+
+  // Close drawer on navigation (mobile)
+  useEffect(() => { onClose() }, [location.pathname])
 
   const refresh = async () => {
     try {
@@ -38,7 +42,24 @@ export function Sidebar() {
   })
 
   return (
-    <aside style={{ background: '#0F1923', width: '240px' }} className="shrink-0 h-full flex flex-col">
+    <aside
+      style={{ background: '#0F1923', width: '240px' }}
+      className={[
+        'shrink-0 h-full flex flex-col overflow-y-auto',
+        // Mobile: fixed overlay drawer, slides in/out
+        'fixed inset-y-0 left-0 z-50 transition-transform duration-200',
+        open ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: back in normal flow
+        'md:static md:translate-x-0 md:z-auto',
+      ].join(' ')}
+    >
+      {/* Close button — mobile only */}
+      <button
+        className="md:hidden absolute top-3 right-3"
+        onClick={onClose}
+        aria-label="Close menu"
+        style={{ color: '#A09890', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '4px' }}
+      >✕</button>
       {/* Logo block — Canvas background matches logo's own background for perfect rendering */}
       <div style={{ background: '#F4F1ED', borderBottom: '3px solid #C8612A', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 20px' }}>
         <img src="/Logo.png" alt="SAWSUBE" style={{ height: '38px', width: 'auto', display: 'block' }} />
