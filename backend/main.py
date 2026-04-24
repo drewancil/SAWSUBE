@@ -17,6 +17,11 @@ from .routers import tv, art, images, schedule, sources, ws as ws_router, meta
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("sawsube")
 
+# Verbose DEBUG for TV-related modules so connection failures are fully visible
+for _tv_logger in ("backend.services.tv_manager", "samsungtvws", "samsungtvws.async_art",
+                   "samsungtvws.async_remote", "samsungtvws.encrypted"):
+    logging.getLogger(_tv_logger).setLevel(logging.DEBUG)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

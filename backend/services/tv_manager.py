@@ -198,6 +198,8 @@ class TVManager:
                 return {"online": True, "artmode": (artmode == "on" or artmode is True),
                         "current": current}
             except Exception as e:
+                log.warning("fetch_status tv %s failed, resetting connection: %s", tv_id, e, exc_info=True)
+                conn.art = None  # force reconnect on next call
                 return {"online": False, "artmode": None, "current": None, "error": str(e)}
 
     # ── High-level operations ────────────────────────────────────────────────
@@ -275,7 +277,8 @@ class TVManager:
             await art.set_artmode("on" if on else "off")
             return True
         except Exception as e:
-            log.warning("set_artmode failed: %s", e)
+            log.warning("set_artmode failed: %s", e, exc_info=True)
+            conn.art = None
             return False
 
     async def upload_image(self, tv: TV, file_path: str, matte: str = "none",
@@ -285,10 +288,13 @@ class TVManager:
             art = await conn._ensure_art()
             with open(file_path, "rb") as f:
                 data = f.read()
+            log.debug("upload_image: uploading %s to TV %s", file_path, tv.id)
             content_id = await art.upload(data, file_type=file_type, matte=matte)
+            log.info("upload_image: TV %s accepted %s → remote_id=%s", tv.id, file_path, content_id)
             return content_id
         except Exception as e:
-            log.warning("upload_image failed: %s", e)
+            log.warning("upload_image failed for TV %s path=%s: %s", tv.id, file_path, e, exc_info=True)
+            conn.art = None  # force reconnect on next call
             return None
 
     async def select_image(self, tv: TV, remote_id: str, show: bool = True) -> bool:
@@ -299,7 +305,8 @@ class TVManager:
             await ws_manager.broadcast({"type": "art_changed", "tv_id": tv.id, "remote_id": remote_id})
             return True
         except Exception as e:
-            log.warning("select_image failed: %s", e)
+            log.warning("select_image failed TV %s remote_id=%s: %s", tv.id, remote_id, e, exc_info=True)
+            conn.art = None
             return False
 
     async def delete_image(self, tv: TV, remote_id: str) -> bool:
@@ -309,7 +316,8 @@ class TVManager:
             await art.delete_list([remote_id])
             return True
         except Exception as e:
-            log.warning("delete_image failed: %s", e)
+            log.warning("delete_image failed TV %s remote_id=%s: %s", tv.id, remote_id, e, exc_info=True)
+            conn.art = None
             return False
 
     async def list_images(self, tv: TV) -> list[dict]:
@@ -319,7 +327,8 @@ class TVManager:
             res = await art.available()
             return res if isinstance(res, list) else []
         except Exception as e:
-            log.warning("list_images failed: %s", e)
+            log.warning("list_images failed TV %s: %s", tv.id, e, exc_info=True)
+            conn.art = None
             return []
 
     async def get_thumbnail(self, tv: TV, content_id: str) -> bytes | None:
@@ -329,7 +338,8 @@ class TVManager:
             data = await art.get_thumbnail(content_id, as_bytes=True)
             return data if isinstance(data, (bytes, bytearray)) else None
         except Exception as e:
-            log.warning("get_thumbnail failed: %s", e)
+            log.warning("get_thumbnail failed TV %s content_id=%s: %s", tv.id, content_id, e, exc_info=True)
+            conn.art = None
             return None
 
     async def set_matte(self, tv: TV, remote_id: str, matte: str) -> bool:
@@ -339,7 +349,8 @@ class TVManager:
             await art.change_matte(remote_id, matte)
             return True
         except Exception as e:
-            log.warning("set_matte failed: %s", e)
+            log.warning("set_matte failed TV %s remote_id=%s: %s", tv.id, remote_id, e, exc_info=True)
+            conn.art = None
             return False
 
     async def get_settings(self, tv: TV) -> dict:
@@ -361,7 +372,8 @@ class TVManager:
                 except Exception:
                     out[key] = None
         except Exception as e:
-            log.warning("get_settings failed: %s", e)
+            log.warning("get_settings failed TV %s: %s", tv.id, e, exc_info=True)
+            conn.art = None
         return out
 
     async def apply_settings(self, tv: TV, payload: dict) -> dict:
@@ -406,7 +418,8 @@ class TVManager:
                 return res
             return list(res) if res else []
         except Exception as e:
-            log.warning("list_mattes failed: %s", e)
+            log.warning("list_mattes failed TV %s: %s", tv.id, e, exc_info=True)
+            conn.art = None
             return []
 
     async def get_current(self, tv: TV) -> dict | None:
@@ -414,7 +427,9 @@ class TVManager:
         try:
             art = await conn._ensure_art()
             return await art.get_current()
-        except Exception:
+        except Exception as e:
+            log.debug("get_current failed TV %s: %s", tv.id, e)
+            conn.art = None
             return None
 
     async def device_info(self, tv: TV) -> dict:
