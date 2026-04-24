@@ -8,7 +8,7 @@ from ..database import get_session
 from ..models.folder import WatchFolder
 from ..schemas import FolderCreate, FolderOut, ImportPayload, ImageOut
 from ..services.watcher import watcher, scan_folder_now
-from ..services.sources import unsplash, nasa_apod, rijksmuseum, reddit, pexels, pixabay
+from ..services.sources import unsplash, nasa_apod, rijksmuseum, reddit, reddit_gallery, pexels, pixabay
 from ..services.sources.common import download_and_register
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
@@ -180,6 +180,26 @@ async def reddit_import(payload: ImportPayload):
     meta = payload.meta or {}
     img = await download_and_register(
         payload.url, "reddit", f"reddit_{payload.id or 'img'}.jpg", meta,
+    )
+    if not img:
+        raise HTTPException(500, "download failed")
+    return img
+
+
+# ── Reddit Galleries ────────────────────────────────────────────────────────
+@router.get("/reddit-gallery/fetch")
+async def reddit_gallery_fetch(sub: str = Query(...), sort: str = "top", t: str = "week", limit: int = 25):
+    return await reddit_gallery.fetch(sub, sort, t, limit)
+
+
+@router.post("/reddit-gallery/import", response_model=ImageOut)
+async def reddit_gallery_import(payload: ImportPayload):
+    if not payload.url:
+        raise HTTPException(400, "url required")
+    meta = payload.meta or {}
+    ext = meta.get("ext", "jpg")
+    img = await download_and_register(
+        payload.url, "reddit", f"reddit_{payload.id or 'img'}.{ext}", meta,
     )
     if not img:
         raise HTTPException(500, "download failed")

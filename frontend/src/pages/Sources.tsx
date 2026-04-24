@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
 
-const TABS = ['Unsplash', 'NASA APOD', 'Rijksmuseum', 'Reddit', 'Pexels', 'Pixabay'] as const
+const TABS = ['Unsplash', 'NASA APOD', 'Rijksmuseum', 'Reddit', 'Reddit Gallery', 'Pexels', 'Pixabay'] as const
 type Tab = typeof TABS[number]
 
 export default function Sources() {
@@ -20,6 +20,7 @@ export default function Sources() {
       {tab === 'NASA APOD' && <Nasa />}
       {tab === 'Rijksmuseum' && <Rijks />}
       {tab === 'Reddit' && <Reddit />}
+      {tab === 'Reddit Gallery' && <RedditGallery />}
       {tab === 'Pexels' && <Pexels />}
       {tab === 'Pixabay' && <Pixabay />}
     </div>
@@ -177,6 +178,42 @@ function Reddit() {
           await api.post('/api/sources/reddit/import', {
             url: it.url, id: it.id,
             meta: { title: it.title, credit: it.credit, html: it.html, subreddit: it.subreddit },
+          })
+          t.push({ type: 'success', text: 'Imported' })
+        } catch (e: any) { t.push({ type: 'error', text: e.message }) }
+      }} />
+    </div>
+  )
+}
+
+function RedditGallery() {
+  const [sub, setSub] = useState('EarthPorn')
+  const [sort, setSort] = useState('top')
+  const [tt, setTt] = useState('week')
+  const [items, setItems] = useState<any[]>([])
+  const t = useToast()
+  const fetchIt = async () => {
+    try { setItems(await api.get(`/api/sources/reddit-gallery/fetch?sub=${sub}&sort=${sort}&t=${tt}&limit=25`)) }
+    catch (e: any) { t.push({ type: 'error', text: e.message }) }
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">Fetches individual images from gallery posts (multi-image posts). Each image in a gallery is shown separately.</p>
+      <div className="flex gap-2">
+        <input className="input" value={sub} onChange={(e) => setSub(e.target.value)} placeholder="subreddit" />
+        <select className="input w-28" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option>top</option><option>hot</option><option>new</option>
+        </select>
+        <select className="input w-28" value={tt} onChange={(e) => setTt(e.target.value)}>
+          <option>day</option><option>week</option><option>month</option><option>year</option><option>all</option>
+        </select>
+        <button className="btn-primary" onClick={fetchIt}>Fetch</button>
+      </div>
+      <Grid items={items} onImport={async (it) => {
+        try {
+          await api.post('/api/sources/reddit-gallery/import', {
+            url: it.url, id: it.id,
+            meta: { title: it.title, credit: it.credit, html: it.html, subreddit: it.subreddit, ext: it.ext },
           })
           t.push({ type: 'success', text: 'Imported' })
         } catch (e: any) { t.push({ type: 'error', text: e.message }) }
