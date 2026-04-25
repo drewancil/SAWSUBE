@@ -563,8 +563,10 @@ class TizenBrewService:
             "step": "installing", "progress": 70,
             "message": "Installing WGT on TV…",
         })
+        # sdb device serial after `sdb connect <ip>` is `<ip>:26101`
+        sdb_serial = tv_ip if ":" in tv_ip else f"{tv_ip}:26101"
         res = await self.run_command(
-            [tizen_path, "install", "-n", wgt_path, "-t", tv_ip],
+            [tizen_path, "install", "-n", wgt_path, "-t", sdb_serial],
             timeout=240.0, tv_id=tv_id, step="installing", progress=85,
         )
         success = res["returncode"] == 0 and "fail" not in res["stdout"].lower()
