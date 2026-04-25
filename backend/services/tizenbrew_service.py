@@ -811,28 +811,69 @@ class TizenBrewService:
 
     # ── App install ────────────────────────────────────────────────────────
     async def fetch_github_wgt(self, repo: str, tv_id: int | None = None) -> dict[str, Any]:
-        url = f"https://api.github.com/repos/{repo}/releases/latest"
+        """Fetch latest .wgt for a repo.
+
+        Strategy:
+          1. Try GitHub Releases (`/releases/latest`) for a .wgt/.tpk asset.
+          2. Fallback: HEAD/GET `https://raw.githubusercontent.com/{repo}/<branch>/<repoName>.wgt`
+             where <repoName> is the second path segment, trying main → master.
+             This lets repos commit a .wgt directly without cutting releases.
+        """
+        api_url = f"https://api.github.com/repos/{repo}/releases/latest"
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                r = await client.get(url, headers={"Accept": "application/vnd.github+json"})
-                r.raise_for_status()
-                rel = r.json()
-                asset = next(
-                    (a for a in rel.get("assets", [])
-                     if a.get("name", "").lower().endswith((".wgt", ".tpk"))),
-                    None,
-                )
-                if not asset:
-                    return {"path": None, "version": None,
-                            "error": f"No .wgt/.tpk asset in latest release of {repo}"}
-                target = self.download_dir / "apps" / asset["name"]
-                target.parent.mkdir(parents=True, exist_ok=True)
-                async with client.stream("GET", asset["browser_download_url"]) as resp:
-                    resp.raise_for_status()
-                    with open(target, "wb") as f:
-                        async for chunk in resp.aiter_bytes(64 * 1024):
-                            f.write(chunk)
-                return {"path": str(target), "version": rel.get("tag_name"), "error": None}
+                # ── 1. Try releases ─────────────────────────────────────────
+                try:
+                    r = await client.get(api_url, headers={"Accept": "application/vnd.github+json"})
+                    if r.status_code == 200:
+                        rel = r.json()
+                        asset = next(
+                            (a for a in rel.get("assets", [])
+                             if a.get("name", "").lower().endswith((".wgt", ".tpk"))),
+                            None,
+                        )
+                        if asset:
+                            target = self.download_dir / "apps" / asset["name"]
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            async with client.stream("GET", asset["browser_download_url"]) as resp:
+                                resp.raise_for_status()
+                                with open(target, "wb") as f:
+                                    async for chunk in resp.aiter_bytes(64 * 1024):
+                                        f.write(chunk)
+                            return {"path": str(target), "version": rel.get("tag_name"), "error": None}
+                except Exception as e:
+                    log.warning("releases lookup failed for %s: %s — trying raw fallback", repo, e)
+
+                # ── 2. Raw repo fallback ────────────────────────────────────
+                repo_name = repo.split("/", 1)[1] if "/" in repo else repo
+                # Try common .wgt names; capitalised first as that's the convention.
+                wgt_candidates = [f"{repo_name}.wgt",
+                                  f"{repo_name.capitalize()}.wgt",
+                                  f"{repo_name.lower()}.wgt"]
+                # De-dup preserving order
+                seen = set()
+                wgt_candidates = [w for w in wgt_candidates if not (w in seen or seen.add(w))]
+                for branch in ("main", "master"):
+                    for wgt_name in wgt_candidates:
+                        raw_url = f"https://raw.githubusercontent.com/{repo}/{branch}/{wgt_name}"
+                        try:
+                            head = await client.head(raw_url, follow_redirects=True)
+                            if head.status_code != 200:
+                                continue
+                            target = self.download_dir / "apps" / wgt_name
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            async with client.stream("GET", raw_url) as resp:
+                                resp.raise_for_status()
+                                with open(target, "wb") as f:
+                                    async for chunk in resp.aiter_bytes(64 * 1024):
+                                        f.write(chunk)
+                            log.info("Fetched %s from raw repo (%s/%s)", wgt_name, repo, branch)
+                            return {"path": str(target), "version": f"raw-{branch}", "error": None}
+                        except Exception:
+                            continue
+
+                return {"path": None, "version": None,
+                        "error": f"No .wgt found in releases or raw repo for {repo}"}
         except Exception as e:
             return {"path": None, "version": None, "error": str(e)}
 

@@ -8,35 +8,59 @@ from ..config import settings
 router = APIRouter(prefix="/api/radarr", tags=["radarr"])
 
 
+# Whitelisted hosts for arbitrary URL proxying (TMDB image CDN, etc.)
+_REMOTE_HOST_WHITELIST = {
+    "image.tmdb.org",
+    "www.themoviedb.org",
+    "themoviedb.org",
+    "artworks.thetvdb.com",
+    "thetvdb.com",
+    "fanart.tv",
+    "assets.fanart.tv",
+}
+
+
 @router.get("/image")
 async def proxy_radarr_image(
-    path: str = Query(..., description="Radarr MediaCover path, e.g. /MediaCover/123/poster.jpg?lastWrite=..."),
-    w: int | None = Query(None, ge=50, le=2000, description="Resize to this width (px) server-side"),
+    path: str | None = Query(None, description="Radarr MediaCover path"),
+    url: str | None = Query(None, description="Whitelisted remote image URL (TMDB/TVDB/FanArt)"),
+    w: int | None = Query(None, ge=50, le=2000, description="Resize to this width (px)"),
 ):
-    """Proxy a Radarr MediaCover image. Supports ?w=N for server-side resize + long-lived cache headers."""
-    if not settings.RADARR_URL:
-        raise HTTPException(status_code=503, detail="RADARR_URL not configured")
+    """Proxy & optionally resize an image from Radarr or a whitelisted remote host.
+    Long-lived cache headers (30d) — Tizen WebKit honours these."""
+    if not path and not url:
+        raise HTTPException(status_code=400, detail="Either 'path' or 'url' is required")
 
-    radarr_base = settings.RADARR_URL.rstrip("/")
-    url = radarr_base + path
-    # Append apikey if not already present
-    sep = "&" if "?" in url else "?"
-    if "apikey=" not in url:
-        url += f"{sep}apikey={settings.RADARR_API_KEY}"
-
-    headers = {"X-Api-Key": settings.RADARR_API_KEY}
+    headers: dict[str, str] = {}
     auth = None
-    if settings.RADARR_USERNAME and settings.RADARR_PASSWORD:
-        auth = (settings.RADARR_USERNAME, settings.RADARR_PASSWORD)
+    target_url: str
+
+    if url:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or parsed.hostname not in _REMOTE_HOST_WHITELIST:
+            raise HTTPException(status_code=400, detail=f"Host '{parsed.hostname}' not whitelisted for remote proxy")
+        target_url = url
+    else:
+        if not settings.RADARR_URL:
+            raise HTTPException(status_code=503, detail="RADARR_URL not configured")
+        radarr_base = settings.RADARR_URL.rstrip("/")
+        target_url = radarr_base + (path or "")
+        sep = "&" if "?" in target_url else "?"
+        if "apikey=" not in target_url:
+            target_url += f"{sep}apikey={settings.RADARR_API_KEY}"
+        headers["X-Api-Key"] = settings.RADARR_API_KEY
+        if settings.RADARR_USERNAME and settings.RADARR_PASSWORD:
+            auth = (settings.RADARR_USERNAME, settings.RADARR_PASSWORD)
 
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            res = await client.get(url, headers=headers, auth=auth)
+            res = await client.get(target_url, headers=headers, auth=auth)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=502, detail=f"Could not reach Radarr: {e}")
+        raise HTTPException(status_code=502, detail=f"Could not reach upstream: {e}")
 
     if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code, detail="Radarr image request failed")
+        raise HTTPException(status_code=res.status_code, detail="Upstream image request failed")
 
     content = res.content
     content_type = res.headers.get("content-type", "image/jpeg")
