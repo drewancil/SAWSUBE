@@ -19,6 +19,13 @@ if [ ! -f .env ]; then
   echo "Created .env from template — edit and re-run if needed."
 fi
 
+# Load nvm if available (Linux/Mac, no system Node installed)
+if ! command -v node >/dev/null 2>&1; then
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  # shellcheck disable=SC1091
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+fi
+
 if command -v node >/dev/null 2>&1; then
   if [ ! -d frontend/dist ]; then
     echo "Building frontend..."
@@ -26,6 +33,7 @@ if command -v node >/dev/null 2>&1; then
   fi
 else
   echo "Node.js not found — frontend will not be served. API only."
+  echo "  Install Node.js or nvm to enable the UI: https://github.com/nvm-sh/nvm"
 fi
 
 echo "Starting Frame Manager on http://localhost:8000"
