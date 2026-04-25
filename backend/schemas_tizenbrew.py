@@ -78,6 +78,7 @@ class AppDefinition(BaseModel):
     source_type: str  # "github" | "wgt_url" | "custom"
     source: str
     category: str = "Misc"
+    inject_config: dict | None = None
 
 
 class InstalledAppOut(BaseModel):

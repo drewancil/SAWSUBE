@@ -527,7 +527,7 @@ class TizenBrewService:
                 })
             return {"path": None, "version": None, "error": str(e)}
 
-    async def inject_app_config(self, app_def: dict[str, Any], wgt_path: str) -> str:
+    async def inject_app_config(self, app_def: dict[str, Any], wgt_path: str, tv_id: int | None = None) -> str:
         """
         If app_def has inject_config, read values from settings and write a
         pre-seed JS file into the WGT before it gets re-signed.  The WGT on
@@ -540,6 +540,7 @@ class TizenBrewService:
 
         inject_cfg = app_def.get("inject_config")
         if not inject_cfg:
+            log.info("inject_app_config: no inject_config for app '%s', skipping", app_def.get("id"))
             return wgt_path
 
         storage_key: str = inject_cfg["storage_key"]
@@ -551,6 +552,19 @@ class TizenBrewService:
             val = getattr(settings, settings_attr, "") or ""
             if val:
                 config[js_key] = val
+
+        log.info("inject_app_config: app='%s' fields=%s values_found=%s",
+                 app_def.get("id"), list(fields.keys()), list(config.keys()))
+
+        if tv_id is not None:
+            preview = {k: (v[:8] + "…" if k == "apiKey" and len(v) > 8 else v)
+                       for k, v in config.items()}
+            await ws_manager.broadcast({
+                "type": "tizenbrew_install_progress", "tv_id": tv_id,
+                "step": "injecting", "progress": 35,
+                "message": f"Injecting config into WGT: {preview}" if config
+                           else "No Radarr credentials in .env — skipping injection",
+            })
 
         if not config:
             return wgt_path  # nothing configured in .env, leave as-is
@@ -867,7 +881,13 @@ class TizenBrewService:
                 return
 
             wgt_path = fetched["path"]
-            wgt_path = await self.inject_app_config(app_def, wgt_path)
+            # Enrich app_def with inject_config from CURATED_APPS if not already present
+            if not app_def.get("inject_config"):
+                for curated in CURATED_APPS:
+                    if curated.get("id") == app_def.get("id"):
+                        app_def = {**app_def, **{k: v for k, v in curated.items() if k not in app_def or not app_def[k]}}
+                        break
+            wgt_path = await self.inject_app_config(app_def, wgt_path, tv_id=tv_id)
             info = await self.fetch_tv_api_info(tv.ip)
             need_cert = info.get("requires_certificate", False)
             if need_cert and wgt_path.lower().endswith(".wgt"):
