@@ -338,14 +338,47 @@ function SetupTab({
               Tizen Studio CLI tools (<code>sdb</code>, <code>tizen</code>) not found on this server.
               They are required to install apps on the TV.
             </InfoBanner>
-            <div style={{ color: C.muted }} className="text-sm">
-              Install Tizen Studio (~3 GB):{' '}
-              <a href="https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html"
-                 target="_blank" rel="noreferrer"
-                 style={{ color: C.accent, textDecoration: 'underline' }}>
-                Samsung official guide
-              </a>
+
+            <InfoBanner kind="warn">
+              <b>Note:</b> If the download page returns a 403 error, disable your VPN — Samsung's CDN (CloudFront) blocks most VPN IP ranges.
+            </InfoBanner>
+
+            <div style={{ color: C.fg, fontSize: '13px', lineHeight: 1.8 }}>
+              <div style={{ color: C.muted, fontSize: '11px', letterSpacing: '0.1em', marginBottom: '6px' }}>INSTALLATION OPTIONS</div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <b>Option A — CLI-only package</b> (recommended, ~200 MB, Linux 64-bit)
+                <br />
+                No IDE needed — just the <code>sdb</code> + <code>tizen</code> binaries:
+                <br />
+                <code style={{
+                  display: 'block', background: '#080E15', padding: '8px 10px',
+                  borderRadius: '4px', margin: '6px 0', fontSize: '12px',
+                  color: '#9CB1C6', fontFamily: 'ui-monospace, Menlo, monospace',
+                  userSelect: 'all',
+                }}>
+                  wget https://download.tizen.org/sdk/Installer/tizen-studio_6.0/web-cli_Tizen_Studio_6.0_ubuntu-64.bin && chmod +x web-cli_Tizen_Studio_6.0_ubuntu-64.bin && ./web-cli_Tizen_Studio_6.0_ubuntu-64.bin
+                </code>
+                After install, the tools will be at <code>~/tizen-studio/tools/</code> — SAWSUBE finds them automatically.
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <b>Option B — Full Tizen Studio IDE</b> (3 GB, required if Option A fails):
+                <br />
+                <a href="https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html"
+                   target="_blank" rel="noreferrer"
+                   style={{ color: C.accent, textDecoration: 'underline' }}>
+                  developer.samsung.com — Installing TV SDK
+                </a>
+                {' '}<span style={{ color: C.muted }}>→ download the .bin GUI installer, run it, install the <b>TV Extensions</b> package</span>
+              </div>
+
+              <div>
+                <b>Option C — Manual path override</b>: if tools are in a non-standard location, set
+                {' '}<code>TIZEN_SDB_PATH</code> and <code>TIZEN_CLI_PATH</code> in your <code>.env</code> file and restart SAWSUBE.
+              </div>
             </div>
+
             <button className="btn-primary" onClick={loadTools}>Refresh</button>
           </div>
         )}
