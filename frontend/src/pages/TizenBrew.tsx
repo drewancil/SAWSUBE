@@ -608,15 +608,23 @@ function AppsTab({
     } catch (e: any) { setBusy(null); t.push({ type: 'error', text: e.message }) }
   }
 
+  const normalizeGithubSource = (src: string): string =>
+    // Strip full GitHub URL to just owner/repo, e.g. https://github.com/foo/bar → foo/bar
+    src.trim()
+      .replace(/^https?:\/\/github\.com\//, '')
+      .replace(/\.git$/, '')
+      .replace(/\/$/, '')
+
   const installCustom = async () => {
     if (!customSrc.trim()) { t.push({ type: 'error', text: 'Enter a source' }); return }
+    const normalizedSrc = customType === 'github' ? normalizeGithubSource(customSrc) : customSrc.trim()
     const def: AppDef = {
       id: 'custom-' + Date.now(),
-      name: customSrc.split('/').pop() || 'Custom App',
+      name: normalizedSrc.split('/').pop() || 'Custom App',
       description: `Custom (${customType})`,
       icon_url: null,
       source_type: customType,
-      source: customSrc.trim(),
+      source: normalizedSrc,
       category: 'Custom',
     }
     install(def)
@@ -630,6 +638,7 @@ function AppsTab({
         {apps.map((a) => {
           const isInstalled = installedSources.has(`${a.source_type}:${a.source}`)
           const isBusy = busy === a.id
+          const isTizenBrewOnly = a.source_type === 'tizenbrew'
           return (
             <div key={a.id} className="card p-4 flex flex-col gap-3"
                  style={{ background: C.card, borderColor: '#2A3845' }}>
@@ -646,16 +655,25 @@ function AppsTab({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div style={{ color: C.fg, fontFamily: 'var(--font-display)', fontSize: '15px' }}>{a.name}</div>
-                  <div className="flex gap-1 mt-1">
+                  <div className="flex gap-1 mt-1 flex-wrap">
                     <span className="badge" style={{ borderColor: C.accent, color: C.accent }}>{a.category}</span>
+                    {isTizenBrewOnly && (
+                      <span className="badge" style={{ borderColor: C.warn, color: C.warn }}>Via TizenBrew</span>
+                    )}
                   </div>
                 </div>
               </div>
               <div style={{ color: C.muted, fontSize: '13px', flex: 1 }}>{a.description}</div>
-              <div style={{ color: C.muted, fontSize: '11px' }}>
-                <code>{a.source_type}:{a.source}</code>
-              </div>
-              {isInstalled ? (
+              {!isTizenBrewOnly && (
+                <div style={{ color: C.muted, fontSize: '11px' }}>
+                  <code>{a.source_type}:{a.source}</code>
+                </div>
+              )}
+              {isTizenBrewOnly ? (
+                <div className="p-3 rounded text-sm" style={{ background: '#0F1923', color: C.warn, border: `1px solid ${C.warn}33` }}>
+                  Open <b>TizenBrew</b> on your TV and find <b>{a.name}</b> in the store to install it.
+                </div>
+              ) : isInstalled ? (
                 <div className="flex gap-2 items-center">
                   <span className="badge" style={{ borderColor: C.ok, color: C.ok }}>✓ Installed</span>
                   <button className="btn-ghost flex-1" onClick={() => install(a)} disabled={isBusy}>
