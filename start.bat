@@ -34,6 +34,26 @@ if %errorlevel%==0 (
   echo Node.js not found — frontend will not be served. API only.
 )
 
+REM ── Instance check ─────────────────────────────────────────────────────────
+for /f "tokens=1" %%P in ('wmic process where "commandline like '%%backend.main%%'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
+  set EXISTING_PID=%%P
+)
+if defined EXISTING_PID (
+  echo.
+  echo [WARNING] SAWSUBE is already running ^(PID: %EXISTING_PID%^)
+  echo   [k] Kill existing instance and start fresh
+  echo   [e] Exit without starting another
+  set /p CHOICE="  Choice [k/e]: "
+  if /i "!CHOICE!"=="k" (
+    echo Stopping PID %EXISTING_PID%...
+    taskkill /F /PID %EXISTING_PID% >nul 2>&1
+    timeout /t 2 /nobreak >nul
+  ) else (
+    echo Exiting - existing instance left running.
+    goto :eof
+  )
+)
+
 echo Starting SAWSUBE on http://localhost:8000
 python -m backend.main
 goto :eof

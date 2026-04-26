@@ -36,5 +36,28 @@ else
   echo "  Install Node.js or nvm to enable the UI: https://github.com/nvm-sh/nvm"
 fi
 
+# ── Instance check ────────────────────────────────────────────────────────
+EXISTING=$(pgrep -f 'python.*backend\.main' 2>/dev/null | tr '\n' ' ')
+if [ -n "$EXISTING" ]; then
+  echo ""
+  echo "⚠  SAWSUBE is already running (PID: $EXISTING)"
+  echo "   [k] Kill existing instance and start fresh"
+  echo "   [e] Exit without starting another"
+  printf "   Choice [k/e]: "
+  read -r choice
+  case "$choice" in
+    k|K)
+      echo "Stopping PID(s): $EXISTING"
+      # shellcheck disable=SC2086
+      kill $EXISTING 2>/dev/null || true
+      sleep 2
+      ;;
+    *)
+      echo "Exiting — existing instance left running."
+      exit 0
+      ;;
+  esac
+fi
+
 echo "Starting Frame Manager on http://localhost:8000"
 exec python -m backend.main
