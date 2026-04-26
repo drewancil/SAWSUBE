@@ -1384,6 +1384,8 @@ class TizenBrewService:
                 settings_js = self._generate_fieshzen_settings_js(
                     server_url=nd_url or "",
                     server_name=nd_name or nd_user or "",
+                    username=nd_user or "",
+                    password=nd_pass or "",
                 )
                 (tmp_dir / "settings.js").write_text(settings_js, encoding="utf-8")
 
@@ -1517,8 +1519,15 @@ class TizenBrewService:
 
     def _generate_fieshzen_settings_js(
         self, server_url: str, server_name: str,
+        username: str = "", password: str = "",
     ) -> str:
         """Generate the settings.js content for Feishin web build."""
+        auto_login_lines = ""
+        if username and password:
+            auto_login_lines = (
+                f"window.AUTO_LOGIN_USERNAME = {json.dumps(username)};\n"
+                f"window.AUTO_LOGIN_PASSWORD = {json.dumps(password)};\n"
+            )
         return f'''"use strict";
 
 window.SERVER_URL = {json.dumps(server_url)};
@@ -1528,7 +1537,7 @@ window.SERVER_LOCK = "true";
 window.LEGACY_AUTHENTICATION = "false";
 window.ANALYTICS_DISABLED = "true";
 window.REMOTE_URL = "";
-
+{auto_login_lines}
 window.FS_GENERAL_THEME = "defaultDark";
 window.FS_GENERAL_THEME_DARK = "defaultDark";
 window.FS_GENERAL_FOLLOW_CURRENT_SONG = "true";
