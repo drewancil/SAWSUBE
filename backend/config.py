@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     SAWSUBE_URL: str = "http://localhost:8000"
     RADARRZEN_SRC_PATH: str = ""
     RADARRZEN_TIZEN_PROFILE: str = "SAWSUBE"
+    SONARR_URL: str = ""
+    SONARR_API_KEY: str = ""
+    SONARRZEN_SRC_PATH: str = ""
+    SONARRZEN_TIZEN_PROFILE: str = "SAWSUBE"
 
     @property
     def resolution_tuple(self) -> tuple[int, int]:

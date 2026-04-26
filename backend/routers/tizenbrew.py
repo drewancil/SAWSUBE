@@ -194,3 +194,16 @@ async def build_install_radarrzen(tv_id: int, s: AsyncSession = Depends(get_sess
     job_id = uuid.uuid4().hex
     asyncio.create_task(tizenbrew_service.build_and_install_radarrzen(tv_id))
     return JobStarted(started=True, job_id=job_id)
+
+
+# ── Sonarrzen local build + install ──────────────────────────────────────────
+@router.post("/{tv_id}/build-install-sonarrzen", response_model=JobStarted, status_code=202)
+async def build_install_sonarrzen(tv_id: int, s: AsyncSession = Depends(get_session)):
+    """Build Sonarrzen WGT from local source (SONARRZEN_SRC_PATH), inject Sonarr
+    credentials, re-sign if required, and install onto the TV."""
+    tv = await s.get(TV, tv_id)
+    if not tv:
+        raise HTTPException(404, "TV not found")
+    job_id = uuid.uuid4().hex
+    asyncio.create_task(tizenbrew_service.build_and_install_sonarrzen(tv_id))
+    return JobStarted(started=True, job_id=job_id)

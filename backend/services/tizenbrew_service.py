@@ -79,6 +79,20 @@ CURATED_APPS: list[dict[str, Any]] = [
             "fields": {"url": "RADARR_URL", "apiKey": "RADARR_API_KEY", "sawsubeUrl": "SAWSUBE_URL"},
         },
     },
+    {
+        "id": "sonarr",
+        "name": "Sonarrzen",
+        "description": "TV-show collection manager for your Samsung TV. Connects to your existing Sonarr instance — browse your library, search for shows, manage seasons & episodes, and monitor downloads from your couch.",
+        "icon_url": "https://raw.githubusercontent.com/Sonarr/Sonarr/develop/Logo/256.png",
+        "source_type": "github",
+        "source": "WB2024/sonarrzen",
+        "category": "Media",
+        "inject_config": {
+            "storage_key": "sonarrzen-config",
+            "config_file": "js/sawsube-config.js",
+            "fields": {"url": "SONARR_URL", "apiKey": "SONARR_API_KEY", "sawsubeUrl": "SAWSUBE_URL"},
+        },
+    },
 ]
 
 
@@ -1089,6 +1103,120 @@ class TizenBrewService:
 
         except Exception as e:
             log.exception("build_and_install_radarrzen crashed")
+            await ws_manager.broadcast({
+                "type": "tizenbrew_install_progress", "tv_id": tv_id,
+                "step": "error", "progress": 0, "message": f"Build error: {e}",
+            })
+
+    # ── Sonarrzen local build + install ────────────────────────────────────
+    async def build_and_install_sonarrzen(self, tv_id: int) -> None:
+        """Build Sonarrzen WGT from local source, inject config, sign if needed, install."""
+        async def _broadcast(msg: str, pct: int, step: str = "building") -> None:
+            await ws_manager.broadcast({
+                "type": "tizenbrew_install_progress",
+                "tv_id": tv_id, "step": step, "progress": pct, "message": msg,
+            })
+
+        try:
+            src_path = getattr(settings, "SONARRZEN_SRC_PATH", "") or ""
+            profile_name = getattr(settings, "SONARRZEN_TIZEN_PROFILE", "SAWSUBE") or "SAWSUBE"
+
+            if not src_path or not Path(src_path).is_dir():
+                await _broadcast(
+                    f"SONARRZEN_SRC_PATH not set or not found ('{src_path}'). "
+                    "Set it in .env to point at the sonarrzen/src directory.",
+                    0, "error",
+                )
+                return
+
+            tools = await self.find_tizen_tools()
+            if not tools["tizen_path"]:
+                await _broadcast("Tizen Studio CLI not found. Install Tizen Studio or set TIZEN_CLI_PATH.", 0, "error")
+                return
+            if not tools["sdb_path"]:
+                await _broadcast("sdb not found. Install Tizen Studio or set TIZEN_SDB_PATH.", 0, "error")
+                return
+
+            async with SessionLocal() as s:
+                tv = await s.get(TV, tv_id)
+            if not tv:
+                await _broadcast("TV not found in DB.", 0, "error")
+                return
+
+            await _broadcast(f"Packaging WGT from {src_path} (profile: {profile_name})…", 10)
+            out_dir_path = self.download_dir / "sonarrzen_build"
+            out_dir = str(out_dir_path)
+            if out_dir_path.exists():
+                for old in out_dir_path.glob("*.wgt"):
+                    old.unlink(missing_ok=True)
+            out_dir_path.mkdir(parents=True, exist_ok=True)
+
+            pkg_res = await self.run_command(
+                [tools["tizen_path"], "package",
+                 "--type", "wgt",
+                 "--sign", profile_name,
+                 "-o", out_dir,
+                 "--", src_path],
+                timeout=120.0, tv_id=tv_id, step="building", progress=20,
+            )
+            if pkg_res["returncode"] != 0:
+                await _broadcast(
+                    f"Build failed (exit {pkg_res['returncode']}): "
+                    f"{pkg_res.get('stderr') or pkg_res['stdout'][-400:]}",
+                    0, "error",
+                )
+                return
+
+            wgt_files = list(Path(out_dir).glob("*.wgt"))
+            if not wgt_files:
+                wgt_files = list(Path(src_path).glob("*.wgt"))
+                if wgt_files:
+                    target = self.download_dir / "sonarrzen_build" / wgt_files[0].name
+                    shutil.move(str(wgt_files[0]), target)
+                    wgt_files = [target]
+            if not wgt_files:
+                await _broadcast("Build produced no .wgt file — check your Tizen profile and src path.", 0, "error")
+                return
+
+            wgt_path = str(wgt_files[0])
+            await _broadcast(f"Built: {Path(wgt_path).name}", 40)
+
+            sonarr_app_def = next(
+                (a for a in CURATED_APPS if a.get("id") == "sonarr"), None
+            )
+            if sonarr_app_def:
+                wgt_path = await self.inject_app_config(sonarr_app_def, wgt_path, tv_id=tv_id)
+                await _broadcast("Config injected.", 55)
+
+            info = await self.fetch_tv_api_info(tv.ip)
+            if info.get("requires_certificate"):
+                await _broadcast("Tizen 7+ TV — re-signing with certificate…", 60, "resigning")
+                rs = await self.resign_wgt(
+                    tools["tizen_path"], wgt_path, profile_name,
+                    str(self.download_dir / "sonarrzen_build" / "signed"), tv_id=tv_id,
+                )
+                if rs.get("error"):
+                    await _broadcast(f"Re-sign failed: {rs['error']}", 0, "error")
+                    return
+                wgt_path = rs["resigned_path"] or wgt_path
+
+            res = await self.install_wgt(tools["sdb_path"], tools["tizen_path"], tv.ip, wgt_path, tv_id)
+            if res["success"]:
+                await self.update_state(tv_id, sdb_connected=True, notes=None)
+                async with SessionLocal() as s:
+                    s.add(TizenBrewInstalledApp(
+                        tv_id=tv_id,
+                        app_name="Sonarrzen",
+                        app_source="local:sonarrzen/src",
+                        wgt_path=wgt_path,
+                        version="local-build",
+                    ))
+                    await s.commit()
+            else:
+                await self.update_state(tv_id, notes=res.get("error") or "install failed")
+
+        except Exception as e:
+            log.exception("build_and_install_sonarrzen crashed")
             await ws_manager.broadcast({
                 "type": "tizenbrew_install_progress", "tv_id": tv_id,
                 "step": "error", "progress": 0, "message": f"Build error: {e}",
