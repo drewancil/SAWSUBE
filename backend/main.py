@@ -19,6 +19,18 @@ from .models import debloat as _debloat_models  # noqa: F401  (register tables)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("sawsube")
 
+
+def _migrate_db_if_needed() -> None:
+    """One-time migration: copy old framemanager.db → sawsube.db if present."""
+    import shutil
+    from pathlib import Path
+    old = Path("./data/framemanager.db")
+    new = Path(settings.DB_PATH)
+    if old.exists() and not new.exists():
+        new.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(old), str(new))
+        log.warning("Migrated old framemanager.db → %s (one-time migration)", new)
+
 # Verbose DEBUG for TV-related modules so connection failures are fully visible
 for _tv_logger in ("backend.services.tv_manager", "samsungtvws", "samsungtvws.async_art",
                    "samsungtvws.async_remote", "samsungtvws.encrypted"):
@@ -27,6 +39,7 @@ for _tv_logger in ("backend.services.tv_manager", "samsungtvws", "samsungtvws.as
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _migrate_db_if_needed()
     await init_db()
     await load_schedules()
     loop = asyncio.get_running_loop()

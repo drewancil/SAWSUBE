@@ -1,9 +1,12 @@
 from __future__ import annotations
 import asyncio
 import html
+import logging
 import re
 import httpx
 from ...config import settings
+
+log = logging.getLogger(__name__)
 
 _last_call = 0.0
 _lock = asyncio.Lock()
@@ -86,7 +89,14 @@ async def fetch(sub: str, sort: str = "top", t: str = "week", limit: int = 20) -
         headers = {"User-Agent": settings.REDDIT_USER_AGENT}
         async with httpx.AsyncClient(timeout=15.0, headers=headers) as c:
             r = await c.get(url, params=params)
-            r.raise_for_status()
+            try:
+                r.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                log.warning(
+                    "Reddit gallery fetch blocked (HTTP %s) — API now requires OAuth2: %s",
+                    exc.response.status_code, url,
+                )
+                return []
             j = r.json()
         _last_call = loop.time()
 
