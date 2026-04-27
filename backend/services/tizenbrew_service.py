@@ -389,6 +389,21 @@ class TizenBrewService:
                 ips.append(parts[0])
         return ips
 
+    async def sdb_uninstall(self, sdb_path: str, tv_ip: str, app_id: str) -> dict[str, Any]:
+        """Uninstall an app by package ID using sdb shell pkgcmd.
+
+        Samsung TVs use pkgcmd -u -n <app_id> (not -d) for widget packages.
+        Connecting is done first to ensure the daemon has the device registered.
+        """
+        await self.run_command([sdb_path, "connect", tv_ip], timeout=30.0)
+        res = await self.run_command(
+            [sdb_path, "shell", "0", "pkgcmd", "-u", "-n", app_id, "-q"],
+            timeout=60.0,
+        )
+        out = (res.get("stdout") or "").lower()
+        success = res["returncode"] == 0 and "fail" not in out
+        return {"success": success, "output": res.get("stdout", ""), "returncode": res["returncode"]}
+
     # ── Certificates ───────────────────────────────────────────────────────
     async def list_certificate_profiles(self, tizen_path: str) -> list[str]:
         res = await self.run_command([tizen_path, "security-profiles", "list"], timeout=15.0)
@@ -800,6 +815,72 @@ class TizenBrewService:
 
         success = res["returncode"] == 0 and "fail" not in res["stdout"].lower() and \
                   "there is no" not in res["stdout"].lower()
+
+        # Detect "Author certificate not match" (error 118/-11): the app is already
+        # installed on the TV signed with a different cert.  Auto-uninstall and retry once.
+        cert_mismatch = "author certificate not match" in res["stdout"].lower() or \
+                        "install failed[118" in res["stdout"].lower()
+        if not success and cert_mismatch:
+            # Extract app_id from the install output: "app_id[<id>]"
+            import re as _re
+            m = _re.search(r"app_id\[([^\]]+)\]", res["stdout"])
+            app_id = m.group(1) if m else None
+            if app_id:
+                await ws_manager.broadcast({
+                    "type": "tizenbrew_install_progress", "tv_id": tv_id,
+                    "step": "installing", "progress": 60,
+                    "message": f"Certificate mismatch — uninstalling old version ({app_id}) and retrying…",
+                })
+                log.info("install_wgt: cert mismatch, uninstalling %s from %s", app_id, tv_ip)
+                await self.sdb_uninstall(sdb_path, tv_ip, app_id)
+                await asyncio.sleep(3)  # give TV time to finish uninstall
+
+                # Retry the install
+                shell_cmd2 = f"{sdb_path} connect {tv_ip} && {tizen_path} install -n {wgt_path}"
+                await ws_manager.broadcast({
+                    "type": "tizenbrew_install_progress", "tv_id": tv_id,
+                    "step": "installing", "progress": 75,
+                    "message": "Retrying install after uninstall…",
+                })
+                proc2 = await asyncio.create_subprocess_shell(
+                    shell_cmd2,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                out_lines2: list[str] = []
+
+                async def _read_shell2() -> None:
+                    assert proc2.stdout
+                    while True:
+                        line = await proc2.stdout.readline()
+                        if not line:
+                            break
+                        text = line.decode(errors="replace").rstrip()
+                        if not text:
+                            continue
+                        out_lines2.append(text)
+                        log.info("tizenbrew install retry: %s", text)
+                        await ws_manager.broadcast({
+                            "type": "tizenbrew_install_progress",
+                            "tv_id": tv_id, "step": "installing",
+                            "message": text, "progress": 85,
+                        })
+
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(_read_shell2(), proc2.wait()), timeout=300.0,
+                    )
+                except asyncio.TimeoutError:
+                    try:
+                        proc2.kill()
+                    except Exception:
+                        pass
+                stdout2 = "\n".join(out_lines2)
+                success = (proc2.returncode or 0) == 0 and \
+                          "fail" not in stdout2.lower() and \
+                          "there is no" not in stdout2.lower()
+                res = {"returncode": proc2.returncode or 0, "stdout": stdout2, "stderr": ""}
+
         if success:
             await ws_manager.broadcast({
                 "type": "tizenbrew_install_progress", "tv_id": tv_id,
